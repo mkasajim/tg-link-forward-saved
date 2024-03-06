@@ -6,6 +6,10 @@ from telethon import TelegramClient, events
 # Database setup
 db_name = 'links.db'
 
+# Explicitly provide the path to your .env file
+dotenv_path = '.env'
+load_dotenv(dotenv_path=dotenv_path)
+
 # Retrieve values from environment
 api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
@@ -70,14 +74,28 @@ else:
 
 client = TelegramClient('anon', api_id, api_hash)
 
-# Handler for new messages with a URL pattern
 @client.on(events.NewMessage(pattern=r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'))
 async def handler(event):
     url = event.message.text
     if not link_exists(conn, url):
         insert_link(conn, url)
-        # Forwarding the message containing a new link to Saved Messages
-        await client.forward_messages(chat_id, event.message)
+        
+        # Attempt to construct a direct link to the message or fallback to the chat link
+        chat_link = f"https://t.me/{event.chat.username}" if event.chat.username else "Direct link not available."
+        
+        # If the chat has a username, try constructing a direct message link
+        if event.chat.username:
+            chat_link += f"/{event.message.id}"  # Append the message ID for a direct link to the message
+        
+        # Get the title of the group/channel
+        source_title = getattr(event.chat, 'title', 'Unknown source')
+        
+        # Prepare the message text with the source and link included
+        message_with_source = f"Source: {source_title}\nLink: {chat_link}\n\n{event.message.text}"
+        
+        # Send the new message with source info to the specified chat ID
+        await client.send_message(chat_id, message_with_source)
+
 
 async def main():
     # Start the client
