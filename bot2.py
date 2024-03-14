@@ -202,6 +202,13 @@ async def show_blacklist(event):
         else:
             await event.reply("The blacklist is currently empty.")
 
+@client.on(events.NewMessage(pattern='/status'))
+async def show_status(event):
+    sender = await event.get_sender()
+    sender_id = sender.id
+    if sender_id == admin_chat_id:
+        await event.reply("The Bot is up and running.")
+
 async def main():
     await client.start(bot_token=bot_token)
     print("Bot is up and running!")
