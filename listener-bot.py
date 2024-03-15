@@ -31,6 +31,7 @@ async def command_handler(event):
     # Respond to the "/ping" command
     await event.reply('Pong!')
 
+
 def main():
     # Start both clients
     print("Listening for incoming messages and bot commands...")
