@@ -105,7 +105,7 @@ async def command_handler(event):
 
 @bot_client.on(events.NewMessage(incoming=True, pattern='/start'))
 async def command_handler(event):
-    # Respond to the "/ping" command
+    # Respond to the "/start" command
     await event.reply('The bot has started!')
 
 @bot_client.on(events.NewMessage(incoming=True,pattern='/block (.+)'))
