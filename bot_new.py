@@ -91,6 +91,23 @@ async def user_message_handler(event):
             base_url, _ = normalize_url(url)
             domain = extract_domain(url)
 
+            if is_new_bot(bots_conn, event.message.text):
+                print("New bot detected!\n-------------------------------------------------------------\n")
+                # bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
+                bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', event.message.text)
+                if bot_link_match:
+                    bot_username = bot_link_match.group(1)
+                    insert_bot(bots_conn, bot_username)
+                    # Send message about the new bot
+                    message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                            f"**Event Link:-**\n{url}\n\n"
+                            f"**Post Source:-** {post_source} ({chat_link})\n"
+                            f"**{source}:-** {chat_title}"
+                        )
+                    print(f"Sending message by bot.............\n-------------------------------------------------------------\n")
+                    await user_client.send_message(chat_id, message_text, parse_mode='md')
+                    break
+
             if not is_domain_blacklisted(blacklist_conn, domain):
                 print("Link is not in blacklist")
                 if not link_exists(conn, domain):
@@ -112,22 +129,7 @@ async def user_message_handler(event):
                     await user_client.send_message(chat_id, message_text, parse_mode='md')
                     break
             
-            elif is_new_bot(bots_conn, event.message.text):
-                print("New bot detected!\n-------------------------------------------------------------\n")
-                # bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
-                bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', event.message.text)
-                if bot_link_match:
-                    bot_username = bot_link_match.group(1)
-                    insert_bot(bots_conn, bot_username)
-                    # Send message about the new bot
-                    message_text = (f"**Full Post:-**\n{event.text}\n\n"
-                            f"**Event Link:-**\n{url}\n\n"
-                            f"**Post Source:-** {post_source} ({chat_link})\n"
-                            f"**{source}:-** {chat_title}"
-                        )
-                    print(f"Sending message by bot.............\n-------------------------------------------------------------\n")
-                    await user_client.send_message(chat_id, message_text, parse_mode='md')
-                    break
+
 
 # Handler for commands sent to the bot
 @bot_client.on(events.NewMessage(incoming=True, pattern='/ping'))
