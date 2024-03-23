@@ -114,7 +114,8 @@ async def user_message_handler(event):
             
             elif is_new_bot(bots_conn, event.message.text):
                 print("New bot detected!")
-                bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
+                # bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
+                bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', event.message.text)
                 if bot_link_match:
                     bot_username = bot_link_match.group(1)
                     insert_bot(bots_conn, bot_username)
@@ -378,11 +379,27 @@ def insert_bot(conn, bot_username):
             return None
     return None
 
-def is_new_bot(conn, text_msg):
-    """ Checks if the given text message contains a new bot link. """
+# def is_new_bot(conn, text_msg):
+#     """ Checks if the given text message contains a new bot link. """
 
-    # Check for Telegram bot links
-    bot_link_match = re.search(r't\.me/([^/]+)', text_msg)
+#     # Check for Telegram bot links
+#     bot_link_match = re.search(r't\.me/([^/]+)', text_msg)
+#     if bot_link_match:
+#         bot_username = bot_link_match.group(1)
+
+#         # Check if the username matches the bot pattern
+#         if re.search(r'_bot$|bot$|Bot$', bot_username):
+#             print(f"Found potential bot link: {bot_username}")
+#             return not bot_exists(conn, bot_username)  # Check if the bot is new
+
+#     return False  # No new bot link found
+
+def is_new_bot(conn, text_msg):
+    """Checks if the given text message contains a new bot link."""
+
+    # Match both "t.me/" and "https://t.me/" patterns
+    bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', text_msg)
+
     if bot_link_match:
         bot_username = bot_link_match.group(1)
 
