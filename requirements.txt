@@ -1,3 +1,4 @@
 python-dotenv
 telethon
-sqlite3
+requests
+beautifulsoup4
