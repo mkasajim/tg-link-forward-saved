@@ -128,6 +128,7 @@ async def user_message_handler(event):
             print(f"New message from {sender_name}: \n{event.text}\n-------------------------------------------------------------")
 
             base_url, _ = normalize_url(url)
+            print(f'\n---------------------------\nBase URL: {base_url}\n-----------------------------')
             domain = extract_domain(url)
 
             if is_new_bot(bots_conn, event.message.text):
@@ -146,14 +147,19 @@ async def user_message_handler(event):
                     print(f"Sending message by bot.............\n-------------------------------------------------------------\n")
                     await user_client.send_message(chat_id, message_text, parse_mode='md')
                     break
+            if is_domain_blacklisted(blacklist_conn, domain):
+                print("Domain is blacklisted!\n-------------------------------------------------------------\n")
+                break
 
             if not is_domain_blacklisted(blacklist_conn, domain):
                 print("Link is not in blacklist")
                 print("\n-------------------------------------------------------------\n")
-                if not insert_link(conn, domain, url):
+                # if not insert_link(conn, domain, url):
+                if not insert_link(conn, domain, base_url):
                     break
                 # if not link_exists(conn, domain):
-                exist = await check_and_insert(url, cursor_webpages)
+                # exist = await check_and_insert(url, cursor_webpages)
+                exist = await check_and_insert(base_url, cursor_webpages)
                 # if check_and_insert(url, cursor_webpages):
                 if exist:
                     print("Link does not exist\n-------------------------------------------------------------\n")
@@ -338,6 +344,8 @@ def normalize_url(url):
     url_parts = list(urlparse(url))
     query = dict(parse_qs(url_parts[4]))
     params = list_refer(refer_conn)
+
+    # print(f'\n-----------------------------------\nParams: {params} \n------------------------------')
 
     # for param in ['Code', 'invite', 'refercode', 'referral_code', 'invite_code', 'r']:
     for param in params:
