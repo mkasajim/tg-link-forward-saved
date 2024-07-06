@@ -3,12 +3,13 @@ import os
 from dotenv import load_dotenv
 import re
 import sqlite3
-from urllib.parse import urlparse, parse_qs, urlunparse
+from urllib.parse import urlparse, parse_qs, urlunparse, urlunsplit
 import socket
 import time
 from bs4 import BeautifulSoup
 import requests
 import hashlib
+from playwright.async_api import async_playwright
 
 # Explicitly provide the path to your .env file
 dotenv_path = '.env'
@@ -119,10 +120,29 @@ async def user_message_handler(event):
                 if not insert_link(conn, domain, url):
                     break
                 # if not link_exists(conn, domain):
-                if check_and_insert(url, cursor_webpages):
+                exist = await check_and_insert(url, cursor_webpages)
+                # if check_and_insert(url, cursor_webpages):
+                if exist:
                     print("Link does not exist\n-------------------------------------------------------------\n")
                     # insert_link(conn, domain, url)
-                    
+
+                    # if chat_link_available:
+                    #     message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                    #         f"**Event Link:-**\n{url}\n\n"
+                    #         f"**Post Source:-** [{post_source}]({chat_link})\n"
+                    #         f"**{source}:-** {chat_title}"
+                    #     )
+                    # else:
+                    #     message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                    #         f"**Event Link:-**\n{url}\n\n"
+                    #         f"**Post Source:-** {post_source} ({chat_link})\n"
+                    #         f"**{source}:-** {chat_title}"
+                    #     )
+                    # print("\033[92mSending message by bot.............\n-------------------------------------------------------------\n")
+                    # print(message_text)
+                    # print("\n-------------------------------------------------------------\n\033[0m")
+                    # await user_client.send_message(chat_id, message_text, parse_mode='md')
+
                     if chat_link_available:
                         message_text = (f"**Full Post:-**\n{event.text}\n\n"
                             f"**Event Link:-**\n{url}\n\n"
@@ -135,12 +155,25 @@ async def user_message_handler(event):
                             f"**Post Source:-** {post_source} ({chat_link})\n"
                             f"**{source}:-** {chat_title}"
                         )
+
                     print("\033[92mSending message by bot.............\n-------------------------------------------------------------\n")
                     print(message_text)
                     print("\n-------------------------------------------------------------\n\033[0m")
-                    await user_client.send_message(chat_id, message_text, parse_mode='md')
+
+                    # Check if the original message contains an image
+                    if event.message.photo:
+                        # Send the message with the image
+                        await user_client.send_file(
+                            chat_id,
+                            event.message.photo,
+                            caption=message_text,
+                            parse_mode='md'
+                        )
+                    else:
+                        # If there's no image, send the message as before
+                        await user_client.send_message(chat_id, message_text, parse_mode='md')
                     break
-            
+
 
 
 # Handler for commands sent to the bot
@@ -494,50 +527,138 @@ conn.commit()
 #     else:
 #         return None
 
-def fetch_and_hash(url):
+# def fetch_and_hash(url):
+#     # Add https if the url does not contain http/https
+#     if not url.startswith('http://') and not url.startswith('https://'):
+#         url = 'https://' + url
+
+#     # Visiting website
+#     print(f"Visiting website: {url}")
+#     print("-------------------------------------------------------------")
+#     try:
+#         response = requests.get(url)
+#     except requests.exceptions.RequestException as e:
+#         print(f"Error occurred: {e}")
+#         return None
+
+#     if response.status_code == 200:
+#         # Optional: Use BeautifulSoup to parse and clean up the HTML
+#         soup = BeautifulSoup(response.content, 'html.parser')
+#         webpage_content = soup.get_text()
+
+#         # Create a hash of the webpage content
+#         hasher = hashlib.sha256()
+#         hasher.update(webpage_content.encode('utf-8'))
+#         return hasher.hexdigest()
+#     else:
+#         return None
+
+# async def fetch_and_hash(url):
+#     # Add https if the url does not contain http/https
+#     if not url.startswith('http://') and not url.startswith('https://'):
+#         url = 'https://' + url
+
+#     print(f"Visiting website: {url}")
+#     print("-------------------------------------------------------------")
+
+#     async with async_playwright() as p:
+#         browser = await p.chromium.launch()
+#         try:
+#             page = await browser.new_page()
+#             response = await page.goto(url)
+
+#             if response is not None and response.ok:
+#                 # Get the full page content
+#                 webpage_content = await page.content()
+
+#                 # Create a hash of the webpage content
+#                 hasher = hashlib.sha256()
+#                 hasher.update(webpage_content.encode('utf-8'))
+#                 return hasher.hexdigest()
+#             else:
+#                 print(f"Failed to load the page. Status: {response.status if response else 'Unknown'}")
+#                 return None
+#         except Exception as e:
+#             print(f"Error occurred: {e}")
+#             return None
+#         finally:
+#             await browser.close()
+
+
+# async def check_and_insert(url, cursor):
+#     content_hash = await fetch_and_hash(url)
+#     if content_hash:
+#         try:
+#             cursor.execute('INSERT INTO web_content (url, content_hash) VALUES (?, ?)', (url, content_hash))
+#             conn.commit()
+#             print(f"Inserted: {url}")
+#             print("\n-------------------------------------------------------------\n")
+#             return True
+#         except sqlite3.IntegrityError:
+#             print(f"Same website already exists: {url}")
+#             print("\n-------------------------------------------------------------\n")
+#             return False
+#     else:
+#         print(f"Failed to fetch or hash content for URL: {url}")
+#         print("\n-------------------------------------------------------------\n")
+#         return False
+
+async def fetch_and_hash(url):
     # Add https if the url does not contain http/https
     if not url.startswith('http://') and not url.startswith('https://'):
         url = 'https://' + url
 
-    # Visiting website
     print(f"Visiting website: {url}")
     print("-------------------------------------------------------------")
-    try:
-        response = requests.get(url)
-    except requests.exceptions.RequestException as e:
-        print(f"Error occurred: {e}")
-        return None
 
-    if response.status_code == 200:
-        # Optional: Use BeautifulSoup to parse and clean up the HTML
-        soup = BeautifulSoup(response.content, 'html.parser')
-        webpage_content = soup.get_text()
-
-        # Create a hash of the webpage content
-        hasher = hashlib.sha256()
-        hasher.update(webpage_content.encode('utf-8'))
-        return hasher.hexdigest()
-    else:
-        return None
-    
-def check_and_insert(url, cursor):
-    content_hash = fetch_and_hash(url)
-    if content_hash:
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
         try:
-            cursor.execute('INSERT INTO web_content (url, content_hash) VALUES (?, ?)', (url, content_hash))
-            conn.commit()
-            print(f"Inserted: {url}")
-            print("\n-------------------------------------------------------------\n")
-            return True
-        except sqlite3.IntegrityError:
-            print(f"Same website already exists: {url}")
-            print("\n-------------------------------------------------------------\n")
-            return False
-    else:
-        print(f"Failed to fetch or hash content for URL: {url}")
+            page = await browser.new_page()
+            response = await page.goto(url)
+            if response is not None and response.ok:
+                # Get the full page content
+                webpage_content = await page.content()
+                # Create a hash of the webpage content
+                hasher = hashlib.sha256()
+                hasher.update(webpage_content.encode('utf-8'))
+                return hasher.hexdigest()
+            else:
+                print(f"Failed to load the page. Status: {response.status if response else 'Unknown'}")
+                return None
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            return None
+        finally:
+            await browser.close()
+
+def hash_url(url):
+    # Parse the URL
+    parsed_url = urlparse(url)
+    # Reconstruct the URL without query parameters
+    clean_url = urlunsplit((parsed_url.scheme, parsed_url.netloc, parsed_url.path, '', ''))
+    # Hash the clean URL
+    hasher = hashlib.sha256()
+    hasher.update(clean_url.encode('utf-8'))
+    return hasher.hexdigest()
+
+async def check_and_insert(url, cursor):
+    content_hash = await fetch_and_hash(url)
+    if content_hash is None:
+        # If fetching fails, hash the URL instead
+        content_hash = hash_url(url)
+        print(f"Using URL hash instead for: {url}")
+
+    try:
+        cursor.execute('INSERT INTO web_content (url, content_hash) VALUES (?, ?)', (url, content_hash))
+        conn.commit()
+        print(f"Inserted: {url}")
+        print("\n-------------------------------------------------------------\n")
+        return True
+    except sqlite3.IntegrityError:
+        print(f"Same website already exists: {url}")
         print("\n-------------------------------------------------------------\n")
         return False
-
 
 
 def main():
