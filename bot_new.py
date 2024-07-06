@@ -91,10 +91,27 @@ async def user_message_handler(event):
             base_url, _ = normalize_url(url)
             domain = extract_domain(url)
 
+            if is_new_bot(bots_conn, event.message.text):
+                print("New bot detected!\n-------------------------------------------------------------\n")
+                # bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
+                bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', event.message.text)
+                if bot_link_match:
+                    bot_username = bot_link_match.group(1)
+                    insert_bot(bots_conn, bot_username)
+                    # Send message about the new bot
+                    message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                            f"**Event Link:-**\n{url}\n\n"
+                            f"**Post Source:-** {post_source} ({chat_link})\n"
+                            f"**{source}:-** {chat_title}"
+                        )
+                    print(f"Sending message by bot.............\n-------------------------------------------------------------\n")
+                    await user_client.send_message(chat_id, message_text, parse_mode='md')
+                    break
+
             if not is_domain_blacklisted(blacklist_conn, domain):
                 print("Link is not in blacklist")
                 if not link_exists(conn, domain):
-                    print("Link does not exist")
+                    print("Link does not exist\n-------------------------------------------------------------\n")
                     insert_link(conn, domain, url)
                     if chat_link_available:
                         message_text = (f"**Full Post:-**\n{event.text}\n\n"
@@ -112,22 +129,7 @@ async def user_message_handler(event):
                     await user_client.send_message(chat_id, message_text, parse_mode='md')
                     break
             
-            elif is_new_bot(bots_conn, event.message.text):
-                print("New bot detected!")
-                # bot_link_match = re.search(r't\.me/([^/]+)', event.message.text)
-                bot_link_match = re.search(r'(?:https?://)?t\.me/([^/?]+)', event.message.text)
-                if bot_link_match:
-                    bot_username = bot_link_match.group(1)
-                    insert_bot(bots_conn, bot_username)
-                    # Send message about the new bot
-                    message_text = (f"**Full Post:-**\n{event.text}\n\n"
-                            f"**Event Link:-**\n{url}\n\n"
-                            f"**Post Source:-** {post_source} ({chat_link})\n"
-                            f"**{source}:-** {chat_title}"
-                        )
-                    print(f"Sending message by bot.............\n-------------------------------------------------------------\n")
-                    await user_client.send_message(chat_id, message_text, parse_mode='md')
-                    break
+
 
 # Handler for commands sent to the bot
 @bot_client.on(events.NewMessage(incoming=True, pattern='/ping'))
@@ -229,7 +231,7 @@ def link_exists(conn, domain):
     cur = conn.cursor()
     cur.execute(sql, (domain,))
     data = cur.fetchone()
-    print (f"Does link exist: {domain}: {data is not None}")
+    print (f"Does link exist: {domain}: {data is not None}\n-------------------------------------------------------------\n")
     return data is not None
 
 # def insert_link(conn, domain, full_url):
@@ -321,7 +323,7 @@ def is_domain_blacklisted(conn, domain):
     cur = conn.cursor()
     cur.execute(sql, (domain,))
     respond = cur.fetchone() is not None
-    print (f"Is domain blacklisted: {domain}: {respond}")
+    print (f"Is domain blacklisted: {domain}: {respond}\n-------------------------------------------------------------\n")
     return respond
 
 blacklist_conn = create_blacklist_connection(blacklist_db_name)
@@ -337,7 +339,7 @@ def extract_domain(url):
     domain = '{uri.netloc}'.format(uri=parsed_uri)
     if domain.startswith('www.'):
         domain = domain[4:]
-    print(domain)
+    print(f"{domain}\n-------------------------------------------------------------\n")
     return domain
 
 # Database for storing bot usernames
@@ -364,7 +366,7 @@ def bot_exists(conn, bot_username):
     cur = conn.cursor()
     cur.execute(sql, (bot_username,))
     data = cur.fetchone()
-    print(f"Does bot exist: {bot_username}: {data is not None}")
+    print(f"Does bot exist: {bot_username}: {data is not None}\n-------------------------------------------------------------\n")
     return data is not None
 
 def insert_bot(conn, bot_username):
