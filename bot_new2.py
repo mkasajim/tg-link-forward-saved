@@ -1,4 +1,5 @@
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, types
+from telethon.extensions import markdown
 import os
 from dotenv import load_dotenv
 import re
@@ -20,6 +21,7 @@ api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
 phone_number = os.getenv('PHONE_NUMBER')
 bot_token = os.getenv('BOT_TOKEN')
+# bot_token2 = os.getenv('NEW_BOT_TOKEN')
 chat_id_str = os.getenv('CHAT_ID')
 admin_chat_id_str = os.getenv('ADMIN_CHAT_ID')
 
@@ -39,15 +41,46 @@ user_client = TelegramClient('anon', api_id, api_hash)
 # Initialize the client for your bot
 bot_client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 
+# bot_client2 = TelegramClient('bot2', api_id, api_hash).start(bot_token=bot_token2)
+
 
 # Handler for new messages to the user account
+# @user_client.on(events.NewMessage(incoming=True))
+# async def user_message_handler(event):
+#     # urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', event.message.text)
+#     url_pattern = r'(?:(?:https?|ftp):\/\/)?(?:www\.)?(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(?:\/[^\s]*)?'
+#     urls = re.findall(url_pattern, event.message.text)
+
+url_pattern = r'\b(?:(?:https?://|www\.)\S+|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:[a-zA-Z]{2,6}))(?:/[^\s()]*[\w()]+)?'
+
 @user_client.on(events.NewMessage(incoming=True))
 async def user_message_handler(event):
-    # urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', event.message.text)
-    url_pattern = r'(?:(?:https?|ftp):\/\/)?(?:www\.)?(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(?:\/[^\s]*)?'
-    urls = re.findall(url_pattern, event.message.text)
+    urls = set()
+    
+    # Entity approach
+    for entity in event.message.entities or []:
+        if isinstance(entity, (types.MessageEntityUrl, types.MessageEntityTextUrl)):
+            if isinstance(entity, types.MessageEntityTextUrl):
+                urls.add(entity.url)
+            else:
+                url = event.message.text[entity.offset:entity.offset+entity.length]
+                urls.add(url)
+    
+    # Regex approach
+    regex_urls = re.findall(url_pattern, event.message.text, re.IGNORECASE)
+    urls.update(regex_urls)
+
+   # Get the markdown of the message
+    markdown_msg = markdown.unparse(event.message.text, event.message.entities)
+    
+    # print(f"Message markdown: {markdown_text}")
+
     if urls:
+        print(f"Detected URLs: {urls}")
         for url in urls:
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+
             chat_title = ''
             sender_name = 'Unknown'  # Default sender name
             source = ''
@@ -105,7 +138,7 @@ async def user_message_handler(event):
                     bot_username = bot_link_match.group(1)
                     insert_bot(bots_conn, bot_username)
                     # Send message about the new bot
-                    message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                    message_text = (f"**Full Post:-**\n{markdown_msg}\n\n"
                             f"**Event Link:-**\n{url}\n\n"
                             f"**Post Source:-** {post_source} ({chat_link})\n"
                             f"**{source}:-** {chat_title}"
@@ -144,13 +177,13 @@ async def user_message_handler(event):
                     # await user_client.send_message(chat_id, message_text, parse_mode='md')
 
                     if chat_link_available:
-                        message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                        message_text = (f"**Full Post:-**\n{markdown_msg}\n\n"
                             f"**Event Link:-**\n{url}\n\n"
                             f"**Post Source:-** [{post_source}]({chat_link})\n"
                             f"**{source}:-** {chat_title}"
                         )
                     else:
-                        message_text = (f"**Full Post:-**\n{event.text}\n\n"
+                        message_text = (f"**Full Post:-**\n{markdown_msg}\n\n"
                             f"**Event Link:-**\n{url}\n\n"
                             f"**Post Source:-** {post_source} ({chat_link})\n"
                             f"**{source}:-** {chat_title}"
@@ -200,6 +233,9 @@ async def show_blacklist(event):
         else:
             await event.reply("The list is currently empty")
 
+
+
+
 @bot_client.on(events.NewMessage(incoming=True, pattern='/block (.+)'))
 async def block_domain(event):
     sender = await event.get_sender()
@@ -225,6 +261,42 @@ async def unblock_domain(event):
             await event.reply(f"Domain {domain_to_unblock} has been removed from the blacklist.")
         else:
             await event.reply(f"Domain {domain_to_unblock} is not in the blacklist.")
+
+@bot_client.on(events.NewMessage(incoming=True, pattern='/refer'))
+async def show_blacklist(event):
+    sender = await event.get_sender()
+    sender_id = sender.id
+    if sender_id == admin_chat_id:
+        refs = list_refer(refer_conn)
+        if refs:
+            message = "All refs:\n" + "\n".join([ref[0] for ref in refs])
+            await event.reply(message)
+        else:
+            await event.reply("The referall list is currently empty")
+
+@bot_client.on(events.NewMessage(incoming=True, pattern='/add_refer (.+)'))
+async def add_refer_param(event):
+    sender = await event.get_sender()
+    sender_id = sender.id
+    if sender_id == admin_chat_id:
+        refer_to_add = event.pattern_match.group(1).strip()  # Remove any leading/trailing whitespace
+        if not is_ref_exist(refer_conn, refer_to_add):
+            insert_refer(refer_conn, refer_to_add)
+            await event.reply(f"Referral parameter {refer_to_add} has been added to the list.")
+        else:
+            await event.reply(f"Referral parameter {refer_to_add} is already in the list.")
+
+@bot_client.on(events.NewMessage(incoming=True, pattern='/remove_refer (.+)'))
+async def remove_refer(event):
+    sender = await event.get_sender()
+    sender_id = sender.id
+    if sender_id == admin_chat_id:
+        refer_to_remove = event.pattern_match.group(1)
+        if is_ref_exist(refer_conn, refer_to_remove):
+            remove_from_refer(refer_conn, refer_to_remove)
+            await event.reply(f"Referral parameter {refer_to_remove} has been removed from the list.")
+        else:
+            await event.reply(f"Referral {refer_to_remove} is not in the list.")
 
 @bot_client.on(events.NewMessage(incoming=True, pattern='/blacklist'))
 async def show_blacklist(event):
@@ -265,7 +337,10 @@ def create_table(conn, create_table_sql):
 def normalize_url(url):
     url_parts = list(urlparse(url))
     query = dict(parse_qs(url_parts[4]))
-    for param in ['Code', 'invite', 'refercode', 'referral_code', 'invite_code']:
+    params = list_refer(refer_conn)
+
+    # for param in ['Code', 'invite', 'refercode', 'referral_code', 'invite_code', 'r']:
+    for param in params:
         query.pop(param, None)
     url_parts[4] = ''
     return urlunparse(url_parts), query
@@ -401,6 +476,62 @@ def extract_domain(url):
         domain = domain[4:]
     print(f"{domain}\n-------------------------------------------------------------\n")
     return domain
+
+refer_db = 'refer.db'
+
+def create_refer_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+    except sqlite3.Error as e:
+        print(e)
+    return conn
+
+def insert_refer(conn, referrer):
+    sql = '''INSERT INTO refer(referrer) VALUES(?)'''
+    try:
+        c = conn.cursor()
+        c.execute(sql, (referrer,))  # Note the comma to make it a tuple
+        conn.commit()
+        return c.lastrowid
+    except sqlite3.IntegrityError:
+        return None
+    
+def remove_from_refer(conn, referrer):
+    sql = '''DELETE FROM refer WHERE referrer=?'''
+    try:
+        c = conn.cursor()
+        c.execute(sql, (referrer,))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(e)
+
+def list_refer(conn):
+    sql = '''SELECT referrer FROM refer'''
+    try:
+        c = conn.cursor()
+        c.execute(sql)
+        return c.fetchall()
+    except sqlite3.Error as e:
+        return []
+    
+def is_ref_exist(conn, referral):
+    sql = '''SELECT id FROM refer WHERE referrer=?'''
+    cur = conn.cursor()
+    cur.execute(sql, (referral,))
+    respond = cur.fetchone() is not None
+    print (f"Is referral exist: {referral}: {respond}\n-------------------------------------------------------------\n")
+    return respond
+
+refer_conn = create_refer_connection(refer_db)
+if refer_conn is not None:
+    create_refer_table_sql = """CREATE TABLE IF NOT EXISTS refer (
+                                    id integer PRIMARY KEY,
+                                    referrer text NOT NULL UNIQUE
+                                );"""
+    create_table(refer_conn, create_refer_table_sql)
+
+
 
 # Database for storing bot usernames
 bots_db_name = 'bots.db'
